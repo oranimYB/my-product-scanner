@@ -16,7 +16,7 @@ async function query() {
   const formData = new FormData();
   formData.append("image", uploadedFile);
 
-  const res = await fetch("https://你的后端域名/api/query", {
+  const res = await fetch("https://my-product-scanner.up.railway.app/api/query", {
     method: "POST",
     body: formData
   });
@@ -40,3 +40,4 @@ async function query() {
 function resetApp() {
   location.reload();
 }
+
