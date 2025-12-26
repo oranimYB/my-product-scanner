@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>拍照查产品代码</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<div class="container">
+  <h1>📷 拍照查产品</h1>
+  <p>拍下产品标签、条码或铭牌，立即查找说明和购买链接</p>
+
+  <!-- 上传区 -->
+  <input type="file" id="imageInput" accept="image/*" capture="environment" style="display:none"/>
+  <button onclick="document.getElementById('imageInput').click()">
+    📸 拍照上传
+  </button>
+  <button onclick="document.getElementById('imageInput').click()">
+    🖼️ 选择图片
+  </button>
+
+  <div id="preview"></div>
+  <button id="submitBtn" style="display:none" onclick="query()">🔍 查询产品</button>
+
+  <!-- 结果区 -->
+  <div id="result" style="display:none; margin-top:20px;">
+    <strong>✅ 查询结果：</strong><br/>
+    <div id="output"></div>
+    <button onclick="resetApp()">🔁 再试一次</button>
+  </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>

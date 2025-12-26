@@ -1,0 +1,110 @@
+// server.js
+require('dotenv').config();
+const express = require('express');
+const multer = require('multer');
+const axios = require('axios');
+const { google } = require('googleapis');
+const fs = require('fs');
+
+const app = express();
+const upload = multer({ dest: 'uploads/' });
+
+// === 配置阿里云 OCR ===
+const ALIYUN_OCR_URL = 'https://ocr.cn-shanghai.aliyuncs.com/';
+const ALIYUN_ACCESS_KEY_ID = process.env.ALIYUN_ACCESS_KEY_ID;
+const ALIYUN_ACCESS_KEY_SECRET = process.env.ALIYUN_ACCESS_KEY_SECRET;
+
+// === 配置 Google Sheets ===
+const SHEETS_ID = process.env.GOOGLE_SHEETS_ID; // 从 URL 中获取
+const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
+
+// 获取认证客户端
+async function getSheetsClient() {
+  const auth = new google.auth.GoogleAuth({
+    keyFile: 'credentials.json', // 下载自 Google Cloud Console
+    scopes: SCOPES,
+  });
+  const client = await auth.getClient();
+  return google.sheets({ version: 'v4', auth: client });
+}
+
+// 上传图片到阿里云 OSS（此处简化为本地路径，实际应上传OSS）
+// 实际项目中建议使用 ali-oss SDK
+
+app.post('/api/query', upload.single('image'), async (req, res) => {
+  try {
+    const imagePath = req.file.path;
+    const imageBuffer = fs.readFileSync(imagePath);
+    const imageBase64 = Buffer.from(imageBuffer).toString('base64');
+
+    // 调用阿里云 OCR
+    const ocrRes = await axios.post(ALIYUN_OCR_URL, {
+      Action: "RecognizeGeneralText",
+      Version: "2019-12-30",
+      ImageUrl: "", // 或传 Base64
+      ImageBase64: imageBase64
+    }, {
+      headers: {
+        'Authorization': `Bearer ${ALIYUN_ACCESS_KEY_ID}:${ALIYUN_ACCESS_KEY_SECRET}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    const textItems = ocrRes.data.Data?.Results || [];
+    const fullText = textItems.map(t => t.Text).join('\n');
+
+    // TODO: 这里加入你的产品数据库匹配逻辑
+    const codeMatch = fullText.match(/([A-Z0-9]{8,})/); // 示例正则提取代码
+    const code = codeMatch ? codeMatch[1] : null;
+    const description = "智能温控保温杯 500ml 不锈钢材质"; // 示例
+    const link = "https://item.jd.com/123456789.html";
+
+    // 写入 Google Sheets
+    const sheets = await getSheetsClient();
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEETS_ID,
+      range: '记录!A1',
+      valueInputOption: 'RAW',
+      resource: {
+        values: [
+          [
+            new Date().toISOString().slice(0, 19).replace('T', ' '), // 时间戳
+            req.ip || 'unknown',
+            '待上传OSS链接', // 后续替换为真实OSS链接
+            code || '',
+            description,
+            link,
+            ocrRes.data.Data?.Confidence?.toFixed(2) || 0.85,
+            '成功',
+            req.headers['user-agent'].includes('Mobile') ? '手机' : 'PC',
+            '中国某城市' // 可接入 IP 定位 API 补充
+          ]
+        ]
+      }
+    });
+
+    // 清理临时文件
+    fs.unlinkSync(imagePath);
+
+    // 返回结果给前端
+    res.json({
+      code: code,
+      description: description,
+      link: link
+    });
+
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ error: "识别失败，请重试" });
+  }
+});
+
+app.use(express.static('.')); // 托管静态文件
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`🚀 服务运行在 http://localhost:${PORT}`);
+});
+app.get('/', (req, res) => {
+  res.send('📸 Product Scan API is running!');
+});
